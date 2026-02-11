@@ -5,7 +5,7 @@ import os
 import time
 
 # Configurare stil Premium
-st.set_page_config(page_title="Wealth Builder Pro", page_icon="💰", layout="wide")
+st.set_page_config(page_title="Wealth Builder Pro v2.0", page_icon="💰", layout="wide")
 
 DB_FILE = "baza_wealth_vizite.json"
 
@@ -28,7 +28,7 @@ if 'v_w' not in st.session_state:
     st.session_state['v_w'] = True
 
 # --- TITLU ȘI CONTOR OO ---
-st.title("💰 Wealth Builder Pro")
+st.title("💰 Wealth Builder Pro v2.0")
 st.markdown(
     f"""
     <div style='text-align: right; margin-top: -55px;'>
@@ -39,52 +39,78 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
-st.markdown("### *\"Profits are better than wages.\" - J. Earl Shoaff*")
+st.markdown("### *\"Don't wish it were easier, wish you were better.\" - J. Earl Shoaff*")
 st.write("---")
 
 # --- SIDEBAR PENTRU INPUTURI ---
 with st.sidebar:
-    st.header("⚙️ Parametri Financiari")
-    investitie_initiala = st.number_input("Suma Inițială (€):", value=1000, step=100)
-    depunere_lunara = st.number_input("Depunere Lunară (€):", value=200, step=50)
+    st.header("⚙️ Configurare Plan")
+    investitie_initiala = st.number_input("Suma Inițială (€):", value=25000, step=1000)
     dobanda_anuala = st.slider("Dobândă Anuală Estimată (%):", 1, 25, 8)
-    ani = st.slider("Orizont de Timp (Ani):", 1, 50, 10)
+    ani_total = st.slider("Orizont de Timp (Ani):", 1, 40, 15)
+    
+    st.divider()
+    st.subheader("🔄 Modificări pe parcurs")
+    st.info("Aici poți schimba strategia după un anumit număr de ani.")
+    an_schimbare = st.number_input("După câți ani schimbi depunerea?", value=5, min_value=1, max_value=ani_total)
+    noua_depunere = st.number_input("Noua depunere lunară (€):", value=500, step=50, help="Poate fi și negativă dacă vrei să simulezi o retragere lunară.")
+    retragere_one_time = st.number_input("Retragere/Depunere unică în acel an (€):", value=0, step=1000, help="Suma extrasă sau adăugată fix în anul schimbării.")
 
-# --- LOGICA DE CALCUL ---
-luni = ani * 12
+# --- LOGICA DE CALCUL DINAMICĂ ---
 rata_lunara = (dobanda_anuala / 100) / 12
 balanta = investitie_initiala
 date_grafic = []
+total_investit_cash = investitie_initiala
 
-for luna in range(1, luni + 1):
-    balanta = (balanta + depunere_lunara) * (1 + rata_lunara)
-    if luna % 12 == 0:
-        date_grafic.append({"An": luna // 12, "Total": round(balanta, 2)})
+for an in range(1, ani_total + 1):
+    # Determinăm depunerea pentru anul curent
+    depunere_curenta = 200 # Depunerea standard de start
+    if an > an_schimbare:
+        depunere_curenta = noua_depunere
+    
+    # Aplicăm depunerea unică (one-time) la începutul anului de schimbare
+    if an == an_schimbare:
+        balanta += retragere_one_time
+        total_investit_cash += retragere_one_time
+    
+    # Calculăm cele 12 luni ale anului
+    for luna in range(1, 13):
+        balanta = (balanta + depunere_curenta) * (1 + rata_lunara)
+        total_investit_cash += depunere_curenta
+        
+    date_grafic.append({
+        "An": an, 
+        "Sold Final (€)": round(balanta, 2), 
+        "Bani Depuși (€)": round(total_investit_cash, 2),
+        "Profit (€)": round(balanta - total_investit_cash, 2)
+    })
 
 df = pd.DataFrame(date_grafic)
 
 # --- AFIȘARE REZULTATE PE PĂTRATE ---
 c1, c2, c3 = st.columns(3)
 
-total_final = date_grafic[-1]["Total"]
-total_investit = investitie_initiala + (depunere_lunara * luni)
-profit_pur = total_final - total_investit
+final_sum = df.iloc[-1]["Sold Final (€)"]
+invested_sum = df.iloc[-1]["Bani Depuși (€)"]
+pure_profit = df.iloc[-1]["Profit (€)"]
 
-c1.metric("💰 Sumă Finală", f"{total_final:,.2f} €")
-c2.metric("📥 Total Investit", f"{total_investit:,.2f} €")
-c3.metric("📈 Profit Pur", f"{profit_pur:,.2f} €", delta=f"{((total_final/total_investit)-1)*100:.1f}%")
+c1.metric("💰 Sold la Final", f"{final_sum:,.2f} €")
+c2.metric("📥 Total Cash Depus", f"{invested_sum:,.2f} €")
+c3.metric("📈 Profit Generat", f"{pure_profit:,.2f} €", delta=f"{((final_sum/invested_sum)-1)*100:.1f}%")
 
-# --- GRAFIC EVOLUȚIE ---
+# --- GRAFIC EVOLUȚIE (DUAL: SOLD vs INVESTIȚIE) ---
 st.divider()
-st.subheader("📊 Evoluția Averei în Timp")
-st.area_chart(df.set_index("An"), color="#22d3ee")
+st.subheader("📊 Analiza Creșterii Exponențiale")
+st.area_chart(df.set_index("An")[["Sold Final (€)", "Bani Depuși (€)"]])
 
 # --- TABEL DE PROIECTIE ---
-with st.expander("📂 Vezi Tabelul Anual de Creștere"):
+with st.expander("📂 Vezi Raportul Anual Detaliat"):
+    st.write("În acest tabel poți vedea exact cum profitul începe să depășească suma depusă de tine (Momentul de Libertate).")
     st.dataframe(df, use_container_width=True)
 
 # --- MESAJ DE FINAL ---
-st.info("💡 Această proiecție este bazată pe dobândă compusă. Rezultatele pot varia, dar disciplina rămâne constantă!")
+st.success(f"💡 Moment cheie: În anul {an_schimbare}, ai ajustat strategia. Observă cum curba se schimbă după acest punct!")
 
 st.divider()
-st.caption("Creat de Cristian | Protocol OO-Wealth | Hardware i5 Cloud")
+st.caption("Arhitectură de Cristian | Protocol OO-Dynamic-Wealth | i5 Cloud Engine")
+
